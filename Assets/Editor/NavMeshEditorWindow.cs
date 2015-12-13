@@ -13,7 +13,10 @@ using NavMeshEditor;
  */
 class NavMeshEditorWindow : EditorWindow
 {
-	private float dotSize = 1;
+	public static string xmlVersionString { get { return "v" + xmlVersion + "." + xmlSubversion; } }
+	public const int xmlVersion = 1;
+	public const int xmlSubversion = 0;
+
 	private EditorNavMesh mesh;
 	public bool editable { get { return this.mesh != null; } }
 
@@ -176,8 +179,8 @@ class NavMeshEditorWindow : EditorWindow
 
 		// Asset
 		Object previous = navMeshFile;
-		navMeshFile = EditorGUILayout.ObjectField("Nav Mesh File: ", navMeshFile, typeof(Object));
-		if (navMeshFile != null && !AssetDatabase.GetAssetPath(navMeshFile).EndsWith(".nvm"))
+		navMeshFile = EditorGUILayout.ObjectField("Nav Mesh File: ", navMeshFile, typeof(Object), false);
+		if (navMeshFile != null && !AssetDatabase.GetAssetPath(navMeshFile).EndsWith(".xml"))
 			navMeshFile = previous;
 
 		// Advanced options
@@ -185,7 +188,6 @@ class NavMeshEditorWindow : EditorWindow
 		if (this.showAdvanced)
 		{
 			EditorNavMesh.GizmosSizeMultiplyer = EditorGUILayout.FloatField("Gizmos Size: ", EditorNavMesh.GizmosSizeMultiplyer);
-			string[] options = { "CanJump", "CanShoot", "CanSwim" };
 			this.raycastMask = EditorGUILayout.LayerField("Raycast Mask (ignore): ", this.raycastMask);
 		}
 	}
@@ -223,19 +225,19 @@ class NavMeshEditorWindow : EditorWindow
 	#region Faces
 	void NewFace()
 	{
-		// Get selected vertexes
+		// Get selected vertices
 		Object[] selected = GetSelectedWithComponet(typeof(Vertex));
 		Vertex[] sel = new Vertex[selected.Length];
 		for (int i = 0; i < sel.Length; i++)
 			sel[i] = selected[i] as Vertex;
 
 		// Create face
-		Face newFace = Face.NewFace(this.mesh, sel);
+		Face.NewFace(this.mesh, sel);
 	}
 
 	void RemoveFaces()
 	{
-		// Get selected vertexes
+		// Get selected vertices
 		Object[] selected = GetSelectedWithComponet(typeof(Face));
 
 		// Removing
@@ -244,22 +246,20 @@ class NavMeshEditorWindow : EditorWindow
 	}
 	#endregion
 
-	#region Vertexes
+	#region Vertices
 	void NewVertex()
 	{
 		// Create Vertex
 		Vertex newVertex = Vertex.NewVertex(this.mesh);
 
 		RaycastHit hit;
-		Physics.Raycast(UnityEditor.SceneView.lastActiveSceneView.camera.ScreenPointToRay(mousePos),
-							out hit, 1000f, raycastMask);
-		if (hit.point != null)
+		if (Physics.Raycast(UnityEditor.SceneView.lastActiveSceneView.camera.ScreenPointToRay(mousePos), out hit, 1000f, raycastMask))
 			newVertex.transform.position = hit.point;
 	}
 
 	void RemoveVertexes()
 	{
-		// Get selected vertexes
+		// Get selected vertices
 		Object[] selected = GetSelectedWithComponet(typeof(Vertex));
 
 		// Removing
@@ -284,7 +284,7 @@ class NavMeshEditorWindow : EditorWindow
 			sel[i] = selected[i] as Face;
 
 		// Create face
-		NavMeshEditor.OffMeshLink newLink = NavMeshEditor.OffMeshLink.NewOffMeshLink(this.mesh, sel[0], sel[1]);
+		NavMeshEditor.OffMeshLink.NewOffMeshLink(this.mesh, sel[0], sel[1]);
 	}
 	void RemoveOffMeshLinks()
 	{
@@ -314,14 +314,12 @@ class NavMeshEditorWindow : EditorWindow
 	#region Save/Load
 	void Save()
 	{
-		bool vertexesGood = true;
-		bool facessGood = true;
-		bool linksGood = true;
 		bool isNew = true;
 		string fileName;
+
 		// Getting name
 		if (navMeshFile == null)
-			fileName = "Assets/" + System.IO.Path.GetRandomFileName() + ".nvm";
+			fileName = "Assets/" + System.IO.Path.GetRandomFileName() + ".xml";
 		else
 		{
 			fileName = AssetDatabase.GetAssetPath(navMeshFile);
@@ -330,98 +328,144 @@ class NavMeshEditorWindow : EditorWindow
 
 		// Check if faces good
 		foreach (Face f in this.mesh.faces)
-			facessGood = facessGood && f.isGood;
-		if (!facessGood)
-		{
-			Debug.LogError("Mesh has non-convex faces! Proceding [May cause errors when loading!]");
-		}
+			if (!f.isGood)
+				Debug.LogWarning("Mesh has non-convex faces! Proceding [May cause errors when loading!]", f);
 
 		// Check if vertices are good
 		foreach (Vertex v in this.mesh.vertexes)
-			vertexesGood = vertexesGood && v.isGood;
-		if (!vertexesGood)
-		{
-			Debug.LogError("There are unused vertexes! Proceding");
-		}
+			if(!v.isGood)
+				Debug.LogWarning("There are unused vertices! Proceding", v);
 
 		// Check if Off-Mesh Links are good
 		foreach (NavMeshEditor.OffMeshLink l in this.mesh.linkList)
-			linksGood = linksGood && l.isGood;
-		if (!linksGood)
-		{
-			Debug.LogError("Mesh has invalid off-mesh links! Proceding");
-		}
+			if (!l.isGood)
+				Debug.LogWarning("Mesh has invalid off-mesh links! Proceding", l);
 
-		// Write
-		System.IO.BinaryWriter writer = new System.IO.BinaryWriter(System.IO.File.Open(fileName, System.IO.FileMode.Create));
-		// Vertexes
-		writer.Write(this.mesh.vertexes.Count);
-		foreach (Vertex v in this.mesh.vertexes)
+		// Creating Xml and start writing
+		System.Xml.XmlWriterSettings settings = new System.Xml.XmlWriterSettings();
+		settings.Indent = true;
+		settings.IndentChars = "\t";
+		using (System.Xml.XmlWriter writer = System.Xml.XmlWriter.Create(fileName, settings))
 		{
-			writer.Write(v.transform.position.x);
-			writer.Write(v.transform.position.y);
-			writer.Write(v.transform.position.z);
-			vertexesGood = vertexesGood && v.isGood;
-		}
-		// Faces
-		writer.Write(this.mesh.faces.Count);
-		foreach (Face f in this.mesh.faces)
-		{
-			writer.Write(f.vertexes.Length);
-			foreach (Vertex v in f.vertexes)
+			writer.WriteStartDocument();
+
+			writer.WriteStartElement("Version");
+			writer.WriteElementString("Version", "" + NavMeshEditorWindow.xmlVersion);
+			writer.WriteElementString("Subversion", "" + NavMeshEditorWindow.xmlSubversion);
+			writer.WriteEndElement();
+
+
+			writer.WriteStartElement("NavMesh");
+
+			// Vertices
+			writer.WriteStartElement("Vertices");
+			foreach (Vertex v in this.mesh.vertexes)
 			{
-				int pos = 0;
-				foreach (Vertex x in this.mesh.vertexes)
+				writer.WriteStartElement("Vertex");
+
+				writer.WriteStartElement("Position");
+				writer.WriteElementString("x", "" + v.transform.position.x);
+				writer.WriteElementString("y", "" + v.transform.position.y);
+				writer.WriteElementString("z", "" + v.transform.position.z);
+				writer.WriteEndElement();
+
+				writer.WriteEndElement();
+			}
+			writer.WriteEndElement();
+
+			// Faces
+			writer.WriteStartElement("Faces");
+			foreach (Face f in this.mesh.faces)
+			{
+				writer.WriteStartElement("Face");
+				foreach (Vertex v in f.vertexes)
 				{
-					if (v == x)
+					int pos = 0;
+					foreach (Vertex x in this.mesh.vertexes)
+					{
+						if (v == x)
+							break;
+						pos++;
+					}
+					writer.WriteElementString("Vertex", "" + pos);
+				}
+				writer.WriteEndElement();
+			}
+			writer.WriteEndElement();
+
+			// Off-Mesh Links
+			writer.WriteStartElement("OffMeshLinks");
+			foreach (NavMeshEditor.OffMeshLink l in this.mesh.linkList)
+			{
+				writer.WriteStartElement("OffMeshLink");
+
+
+				writer.WriteStartElement("Point-A");
+
+				writer.WriteStartElement("Position");
+				writer.WriteElementString("x", "" + l.transform.position.x);
+				writer.WriteElementString("y", "" + l.transform.position.y);
+				writer.WriteElementString("z", "" + l.transform.position.z);
+				writer.WriteEndElement();
+
+				int pos = 0;
+				foreach (Face f in this.mesh.faces)
+				{
+					if (f == l.linkedFace)
 						break;
 					pos++;
 				}
-				writer.Write(pos);
+				writer.WriteElementString("Face", "" + pos);
+
+				writer.WriteEndElement(); // End Point A
+
+
+				writer.WriteStartElement("Point-B");
+
+				writer.WriteStartElement("Position");
+				writer.WriteElementString("x", "" + l.brother.transform.position.x);
+				writer.WriteElementString("y", "" + l.brother.transform.position.y);
+				writer.WriteElementString("z", "" + l.brother.transform.position.z);
+				writer.WriteEndElement();
+
+				pos = 0;
+				foreach (Face f in this.mesh.faces)
+				{
+					if (f == l.brother.linkedFace)
+						break;
+					pos++;
+				}
+				writer.WriteElementString("Face", "" + pos);
+
+				writer.WriteEndElement(); // End Point B
+
+				writer.WriteEndElement();
+
+				switch (l.direction)
+				{
+					case NavMeshEditor.OffMeshLinkDirection.none:
+						writer.WriteElementString("Direction", "none");
+						break;
+					case NavMeshEditor.OffMeshLinkDirection.going:
+						writer.WriteElementString("Direction", "A to B");
+						break;
+					case NavMeshEditor.OffMeshLinkDirection.returning:
+						writer.WriteElementString("Direction", "B to A");
+						break;
+					case NavMeshEditor.OffMeshLinkDirection.both:
+						writer.WriteElementString("Direction", "both");
+						break;
+				}
 			}
+
+			// Import if new
+			if (isNew)
+				AssetDatabase.ImportAsset(fileName);
+
+			writer.WriteEndElement();
+			writer.WriteEndDocument();
+			writer.Close();
 		}
-		// Off-Mesh Links
-		writer.Write(this.mesh.linkList.Count);
-		foreach (NavMeshEditor.OffMeshLink l in this.mesh.linkList)
-		{
-			writer.Write(l.transform.position.x);
-			writer.Write(l.transform.position.y);
-			writer.Write(l.transform.position.z);
-
-
-			writer.Write(l.brother.transform.position.x);
-			writer.Write(l.brother.transform.position.y);
-			writer.Write(l.brother.transform.position.z);
-
-			int pos = 0;
-			foreach (Face f in this.mesh.faces)
-			{
-				if (f == l.linkedFace)
-					break;
-				pos++;
-			}
-			writer.Write(pos);
-
-			pos = 0;
-			foreach (Face f in this.mesh.faces)
-			{
-				if (f == l.brother.linkedFace)
-					break;
-				pos++;
-			}
-			writer.Write(pos);
-
-			writer.Write((int)l.direction);
-		}
-
-		writer.Close();
-
-		// Import if new
-		if (isNew)
-			AssetDatabase.ImportAsset(fileName);
-
-		// Feedback if not good
-		Debug.Log("Saved successfully as " + fileName);
 	}
 
 	void Load()
@@ -431,68 +475,99 @@ class NavMeshEditorWindow : EditorWindow
 
 		this.StartEdit();
 
-
 		// Getting name
 		string fileName = AssetDatabase.GetAssetPath(navMeshFile);
 
-		// Read
-		System.IO.BinaryReader reader = new System.IO.BinaryReader(System.IO.File.Open(fileName, System.IO.FileMode.Open));
-		// Vertexes
-		int vertexes = reader.ReadInt32();
-		Vector3 pos = Vector3.zero;
-		for (int i = 0; i < vertexes; i++)
+		// Creating Xml and start writing
+		System.Xml.XmlReaderSettings settings = new System.Xml.XmlReaderSettings();
+		using (System.Xml.XmlReader reader = System.Xml.XmlReader.Create(fileName, settings))
 		{
-			float x = reader.ReadSingle();
-			float y = reader.ReadSingle();
-			float z = reader.ReadSingle();
-			Vertex newV = Vertex.NewVertex(this.mesh);
-			newV.transform.position = new Vector3(x, y, z);
-		}
+			System.Xml.Linq.XDocument doc = System.Xml.Linq.XDocument.Load(reader);
+			System.Xml.Linq.XElement rootElement = doc.Element("NavMesh");
+			System.Xml.Linq.XElement curElement;
 
-		// Faces
-		int faces = reader.ReadInt32();
-		for (int i = 0; i < faces; i++)
-		{
-			vertexes = reader.ReadInt32();
-			int[] vertexIndexes = new int[vertexes];
-			Vertex[] v = new Vertex[vertexes];
-
-			// Read vertexe indexes
-			for (int j = 0; j < vertexes; j++)
+			// Check version compatibility
+			int version = int.Parse(doc.Element("Version").Element("Version").Value);
+			if (version != NavMeshEditorWindow.xmlVersion)
 			{
-				int vertexIndex = reader.ReadInt32();
-				v[j] = mesh.vertexes[vertexIndex];
+				Debug.LogError("Xml Vile incompatible [file version = " + version + ", current version = " + NavMeshEditorWindow.xmlVersion + "]");
+				reader.Close();
+				return;
 			}
 
-			// Adding face
-			Face.NewFace(this.mesh, v);
+			// Vertices
+			curElement = rootElement.Element("Vertices");
+			foreach (System.Xml.Linq.XElement vertexElement in curElement.Elements("Vertex"))
+			{
+				System.Xml.Linq.XElement position = vertexElement.Element("Position");
+				float x = float.Parse(position.Element("x").Value);
+				float y = float.Parse(position.Element("y").Value);
+				float z = float.Parse(position.Element("z").Value);
+
+				// Create
+				Vertex newVertex = Vertex.NewVertex(this.mesh);
+				newVertex.transform.position = new Vector3(x, y, z);
+			}
+
+			// Faces
+			curElement = rootElement.Element("Faces");
+			foreach (System.Xml.Linq.XElement faceElement in curElement.Elements("Face"))
+			{
+				List<Vertex> vertices = new List<Vertex>();
+
+				foreach (System.Xml.Linq.XElement vertexElement in faceElement.Elements("Vertex"))
+				{
+					int index = int.Parse(vertexElement.Value);
+					vertices.Add(this.mesh.vertexes[index]);
+				}
+
+				// Create
+				Face.NewFace(this.mesh, vertices.ToArray());
+			}
+
+			// Off-Mesh Links
+			curElement = rootElement.Element("OffMeshLinks");
+			foreach (System.Xml.Linq.XElement linkElement in curElement.Elements("OffMeshLink"))
+			{
+				// Point A
+				System.Xml.Linq.XElement pointElement = linkElement.Element("Point-A");
+				System.Xml.Linq.XElement position = pointElement.Element("Position");
+				float x_A = float.Parse(position.Element("x").Value);
+				float y_A = float.Parse(position.Element("y").Value);
+				float z_A = float.Parse(position.Element("z").Value);
+
+				int faceIndex_A = int.Parse(pointElement.Element("Face").Value);
+
+				// Point B
+				pointElement = linkElement.Element("Point-B");
+				position = pointElement.Element("Position");
+				float x_B = float.Parse(position.Element("x").Value);
+				float y_B = float.Parse(position.Element("y").Value);
+				float z_B = float.Parse(position.Element("z").Value);
+
+				int faceIndex_B = int.Parse(pointElement.Element("Face").Value);
+
+				// Direction
+				string directionString = linkElement.Element("Direction").Value;
+				NavMeshEditor.OffMeshLinkDirection direction = NavMeshEditor.OffMeshLinkDirection.none;
+				if (directionString.Equals("none"))
+					direction = NavMeshEditor.OffMeshLinkDirection.none;
+				else if (directionString.Equals("A to B"))
+					direction = NavMeshEditor.OffMeshLinkDirection.going;
+				else if (directionString.Equals("B to A"))
+					direction = NavMeshEditor.OffMeshLinkDirection.returning;
+				else if (directionString.Equals("both"))
+					direction = NavMeshEditor.OffMeshLinkDirection.both;
+
+				// Create
+				NavMeshEditor.OffMeshLink newLink = NavMeshEditor.OffMeshLink.NewOffMeshLink(this.mesh, this.mesh.faces[faceIndex_A], this.mesh.faces[faceIndex_B]);
+				newLink.direction = direction;
+				newLink.transform.position = new Vector3(x_A, y_A, z_A);
+				newLink.brother.transform.position = new Vector3(x_B, y_B, z_B);
+			}
+
+			reader.Close();
 		}
-
-		// Off-Mesh Links
-		int links = reader.ReadInt32();
-		for (int i = 0; i < links; i++)
-		{
-			float x_A = reader.ReadSingle();
-			float y_A = reader.ReadSingle();
-			float z_A = reader.ReadSingle();
-
-			float x_B = reader.ReadSingle();
-			float y_B = reader.ReadSingle();
-			float z_B = reader.ReadSingle();
-
-			int faceIndex_A = reader.ReadInt32();
-
-			int faceIndex_B = reader.ReadInt32();
-
-			int direction = reader.ReadInt32();
-
-
-			NavMeshEditor.OffMeshLink newLink = NavMeshEditor.OffMeshLink.NewOffMeshLink(this.mesh, this.mesh.faces[faceIndex_A], this.mesh.faces[faceIndex_B]);
-			newLink.transform.position = new Vector3(x_A, y_A, z_A);
-			newLink.brother.transform.position = new Vector3(x_B, y_B, z_B);
-		}
-
-		reader.Close();
 
 		SceneView.RepaintAll();
 	}
@@ -503,7 +578,7 @@ class NavMeshEditorWindow : EditorWindow
 
 	Object[] GetSelectedWithComponet(System.Type component)
 	{
-		// Get selected vertexes
+		// Get selected vertices
 		Transform[] selected = Selection.transforms;
 		System.Collections.Generic.List<Object> selectedWithComponent = new System.Collections.Generic.List<Object>();
 
