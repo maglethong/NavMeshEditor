@@ -1,0 +1,14 @@
+# Ignore everything
+*
+
+# But not these files...
+!.gitignore
+!/Assets/Editor/*
+!/Assets/NavMeshEditor/*
+!*.unitypackage
+
+*.meta
+*.META
+
+# ...even if they are in subdirectories
+!*/
