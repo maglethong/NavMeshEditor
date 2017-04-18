@@ -7,13 +7,9 @@ namespace NavMeshEditor
 {
 	public class Face : MonoBehaviour
 	{
-
 		public Vertex[] vertexes;
-
 		private static int count = 0;
-
 		EditorNavMesh navMesh;
-
 		public bool markConvex = true;
 
 		public Vector3 center

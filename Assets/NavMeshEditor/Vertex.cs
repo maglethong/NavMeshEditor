@@ -7,11 +7,8 @@ namespace NavMeshEditor
 {
 	public class Vertex : MonoBehaviour
 	{
-
 		public List<Face> faces = new List<Face>();
-
 		private static int count = 0;
-
 		EditorNavMesh navMesh;
 
 		public bool isGood { get { return this.faces.Count > 0; } }
@@ -53,7 +50,7 @@ namespace NavMeshEditor
 
 		public void Draw(Color color, Color conflictColor)
 		{
-			float size = Vector3.Distance(UnityEditor.SceneView.lastActiveSceneView.camera.transform.position, this.transform.position) * EditorNavMesh.GizmosSizeMultiplyer;
+			float size = EditorNavMesh.GizmosSizeMultiplyer;
 			if ( !this.isGood )
 				Gizmos.color = conflictColor;
 			else

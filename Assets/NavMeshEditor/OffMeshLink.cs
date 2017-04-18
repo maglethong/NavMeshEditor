@@ -16,15 +16,10 @@ namespace NavMeshEditor
 
 	public class OffMeshLink : MonoBehaviour
 	{
-
 		public Face linkedFace;
-
 		public OffMeshLink brother;
-
 		public bool isMain;
-
 		private static int count = 0;
-
 		EditorNavMesh navMesh;
 
 		public bool isGood { get { return this.brother != null; } }
@@ -91,7 +86,7 @@ namespace NavMeshEditor
 		public void Draw(Color color, Color linkedFaceColor, Color linkColor, Color conflictColor)
 		{
 			// Draw Point
-			float size = Vector3.Distance(UnityEditor.SceneView.lastActiveSceneView.camera.transform.position, this.transform.position) * EditorNavMesh.GizmosSizeMultiplyer;
+			float size = EditorNavMesh.GizmosSizeMultiplyer;
 			if (!this.isGood)
 				Gizmos.color = conflictColor;
 			else

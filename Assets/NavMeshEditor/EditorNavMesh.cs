@@ -7,13 +7,11 @@ namespace NavMeshEditor
 {
 	public class EditorNavMesh : MonoBehaviour
 	{
-
 		public List<Vertex> vertexes = new List<Vertex>();
 		public List<Face> faces = new List<Face>();
 		public List<OffMeshLink> linkList = new List<OffMeshLink>();
 
-
-		public static float GizmosSizeMultiplyer = 0.02f;
+		public static float GizmosSizeMultiplyer = 0.5f;
 
 
 		public static EditorNavMesh NewNavMesh()

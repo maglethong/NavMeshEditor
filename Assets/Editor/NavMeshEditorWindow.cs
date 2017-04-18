@@ -17,16 +17,19 @@ class NavMeshEditorWindow : EditorWindow
 	public const int xmlVersion = 1;
 	public const int xmlSubversion = 0;
 
+	[SerializeField]
 	private EditorNavMesh mesh;
 	public bool editable { get { return this.mesh != null; } }
 
+	[SerializeField]
 	public static NavMeshEditorWindow me = null;
 
+	[SerializeField]
 	Object navMeshFile;
-
 
 	private bool showAdvanced = false;
 
+	[SerializeField]
 	private LayerMask raycastMask;
 
 	Vector2 mousePos = Vector2.zero;
@@ -349,13 +352,12 @@ class NavMeshEditorWindow : EditorWindow
 		{
 			writer.WriteStartDocument();
 
+			writer.WriteStartElement("NavMesh");
+
 			writer.WriteStartElement("Version");
 			writer.WriteElementString("Version", "" + NavMeshEditorWindow.xmlVersion);
 			writer.WriteElementString("Subversion", "" + NavMeshEditorWindow.xmlSubversion);
 			writer.WriteEndElement();
-
-
-			writer.WriteStartElement("NavMesh");
 
 			// Vertices
 			writer.WriteStartElement("Vertices");
@@ -487,7 +489,7 @@ class NavMeshEditorWindow : EditorWindow
 			System.Xml.Linq.XElement curElement;
 
 			// Check version compatibility
-			int version = int.Parse(doc.Element("Version").Element("Version").Value);
+			int version = int.Parse(rootElement.Element("Version").Element("Version").Value);
 			if (version != NavMeshEditorWindow.xmlVersion)
 			{
 				Debug.LogError("Xml Vile incompatible [file version = " + version + ", current version = " + NavMeshEditorWindow.xmlVersion + "]");
